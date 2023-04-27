@@ -4,17 +4,17 @@
 
 | 서비스                | url                   |
 |--------------------|-----------------------|
-| SERVICE INSTANCE A | http://localhost:8080 |
-| SERVICE INSTANCE B | http://localhost:8081 |
-| SERVICE INSTANCE C | http://localhost:8082 |
+| SERVICE INSTANCE **A** | http://**localhost:8080** |
+| SERVICE INSTANCE **B** | http://**localhost:8081** |
+| SERVICE INSTANCE **C** | http://**localhost:8082** |
 
 만약 PC가 한 대 이상일 때는 IP가 다르기 때문에 포트는 동일하게 실행해도 된다.
 
-| 서비스                | url                    |
-|--------------------|------------------------|
-| SERVICE INSTANCE A | http://my-server1:8080 |
-| SERVICE INSTANCE B | http://my-server2:8080 |
-| SERVICE INSTANCE C | http://my-server3:8080 |
+| 서비스                    | url                    |
+|------------------------|------------------------|
+| SERVICE INSTANCE **A** | http://**my-server1:8080** |
+| SERVICE INSTANCE **B** | http://**my-server2:8080** |
+| SERVICE INSTANCE **C** | http://**my-server3:8080** |
 
 - **Eureka**가 해주는 역할을 **Service Discovery**라고 한다.
 - **Service** **Discovery**는 외부에서 다른 서비스들이 마이크로서비스들을 검색하기 위해서 사용되는 개념이다.
