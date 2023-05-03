@@ -21,10 +21,16 @@
 
 **동작 방식**
 
-1. 각각의 마이크로서비스들의 위치 정보를 `Spring Cloud Netflix Eureka`에 등록을 해준다.
-2. 등록된 마이크로서비스를 사용하고 싶은 Client는 자신이 필요한 요청정보를 `Load Balancer(API Gateway)`에 전달한다.
-3. 요청 정보는 `Service Discovery`에 전달이 되서 필요한 정보에 맞는 마이크로서비스의 위치 정보를 반환한다.
-4. 마이크로서비스의 위치 정보를 받은 `Load Balancer`는 해당 마이크로서비스에 요청 정보를 전달해 필요한 정보를 반환받는다.
+![](img/img_11.png)
+
+(서비스 실행시)각각의 마이크로서비스들의 위치 정보를 `Spring Cloud Netflix Eureka`에 등록을 해준다.
+
+1. 등록된 마이크로서비스를 사용하고 싶은 `Client`는 자신이 필요한 요청정보를 `Load Balancer(API Gateway)`에 전달한다.
+2. 요청 정보는 `Service Discovery`에 전달이 되서 필요한 정보에 맞는 `마이크로서비스`의 위치 정보를 반환한다.
+3. `마이크로서비스`의 위치 정보를 받은 `Load Balancer`는 해당 `마이크로서비스`에 요청 정보를 전달한다.
+4. 요청 정보를 받은 `마이크로서비스`가 요청 정보에 맞게 프로세스를 처리한다.
+5. 응답 정보를 `Load Balancer`에게 반환한다.
+6. `Client`에게 응답정보를 반환한다.
 
 ## 프로젝트 생성
 
@@ -285,3 +291,174 @@ eureka:
 ![](img/img_10.png)
 
 - 인스턴스 아이디를 지정후 서버를 2개 실행하게 되면 위와 같이 2개의 서비스가 실행중인걸 확인할 수 있다.
+
+# API Gateway Service
+
+![](img/img_12.png)
+
+**클라이언트-마이크로서비스 간 직접 통신 대신 API Gateway를 고려하는 이유**
+
+마이크로서비스 아키텍처에서 클라이언트 앱은 일반적으로 둘 이상의 마이크로서비스에서 제공하는 기능을 사용해야 한다. 해당 사용이 직접 실행되는 경우 클라이언트는 마이크로서비스 엔드포인트에 대한 여러 호출을 처리해야 한다. 애플리케이션이 개선되고 새 마이크로서비스가 도입되었거나 기존 마이크로서비스가 업데이트되면 어떻게 해야하나? 애플리케이션에 여러 마이크로서비스가 있는 경우 클라이언트 앱에서 많은 엔드포인트를 처리하는 것은 큰 문제일 수 있다. 클라이언트 앱은 해당 내부 엔드 포인트에 결합되므로 나중에 마이크로서비스가 개선되면 클라이언트 앱에 큰 영향을 줄 수 있다.
+
+따라서 중간 수준 또는 간접 참조 계층(Gateway)을 포함하면 마이크로서비스 기반 애플리케이션의 경우 편리해진다. API Gateway가 없는 경우 클라이언트 앱은 마이크로서비스로 직접 요청을 보내야 하는데 이경우 다음과 같은 문제가 발생한다.
+
+- 결합: **API Gateway 패턴**이 없으면 클라이언트 앱은 내부 마이크로서비스에 결합된다. 클라이언트 앱은 애플리케이션의 여러 영역이 마이크로서비스에서 어떻게 분해되는지 알아야 한다. 내부 마이크로서비스를 개선하고 리팩터링할 경우 클라이언트 앱에서 내부 마이크로서비스를 직접 참조하기 때문에 클라이언트 앱에 호환성이 손상되는 변경이 발생하므로 해당 작업은 유지관리에 영향을 준다. 클라이언트 앱을 자주 업데이트해야 하므로 솔루션을 개선하기가 더 어려워진다.
+- 너무 많은 왕복: 클라이언트 앱의 단일 페이지/화면에서 여러 서비스를 몇 번 호출해야 할 수 있다. 해당 접근 방식으로 인해 클라이언트와 서버 간에 여러 번의 네트워크 왕복이 발생할 수 있어 대기 시간이 상당히 늘어난다. 중간 수준에서 처리되는 집계는 클라이언트 앱의 성능과 사용자 환경을 향상할 수 있다.
+- 보안 문제: Gateway가 없으면 모든 마이크로서비스가 “외부 세계”에 노출되어야 하므로 클라이언트 앱에서 직접 사용되지 않는 내부 마이크로서비스를 숨길 경우보다 더 큰 공격 표면이 생성된다. 공격 표면이 작을수록 애플리케이션을 더 안전하게 보호할 수 있다.
+- 교차 편집 문제: 공개적으로 게시된 각 마이크로서비스는 권한 부여 및 SSL과 같은 문제를 처리해야 한다. 대부분의 경우 이러한 문제는 단일 계층에서 처리할 수 있으므로 내부 마이크로서비스가 간소화 된다.
+
+**API Gateway Service 사용시 가능한 기능들**
+
+- 인증 및 권한 부여
+- 서비스 검색 통합
+- 응답 캐싱
+- 정책, 회로 차단기 및 QoS 다시 시도
+- 속도 제한
+- 부하 분산
+- 로깅, 추적, 상관관계
+- 헤더, 쿼리 문자열 및 청구 변환
+- IP 허용 목록에 추가
+
+# Spring Cloud Gateway
+
+## 프로젝트 생성
+
+### first-service 프로젝트 생성
+
+![](img/img_13.png)
+
+![](img/img_14.png)
+
+*FirstServiceController.java*
+
+```java
+package com.example.firstservice;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/first-service")
+public class FirstServiceController {
+    @GetMapping("/welcome")
+    public String welcome() {
+        return "Welcome to the First service.";
+    }
+}
+```
+
+*application.yml*
+
+```yaml
+server:
+  port: 8081
+
+spring:
+  application:
+    name: my-first-service
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+```
+
+*실행*
+
+![](img/img_15.png)
+
+- 해당 **8081** **port**로 접속해서 기대했던 화면이 표시된다.
+
+### second-service 프로젝트 생성
+
+![](img/img_16.png)
+
+![](img/img_17.png)
+
+*SecondServiceController.java*
+
+```java
+package com.example.secondservice;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/second-service")
+public class SecondServiceController {
+    @GetMapping("/welcome")
+    public String welcome() {
+        return "Welcome to the Second service.";
+    }
+}
+```
+
+*application.yml*
+
+```yaml
+server:
+  port: 8082
+
+spring:
+  application:
+    name: my-second-service
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+```
+
+*실행*
+
+![](img/img_18.png)
+
+- first-service와 같이 지정해놓은 **8082 port**로 접속하여 기대했던 화면이 표시된걸 확인할 수 있다.
+
+### api gateway-service 프로젝트 생성
+
+![](img/img_19.png)
+
+![](img/img_20.png)
+
+- Spring Cloud Routing의 Gateway를 선택해주어야 한다.
+
+*application.yml*
+
+```yaml
+server:
+  port: 8000
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+spring:
+  application:
+    name: apigateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: first-service
+          uri: http://localhost:8081/
+          predicates:
+            - Path=/first-service/**
+        - id: second-service
+          uri: http://localhost:8082/
+          predicates:
+            - Path=/second-service/**
+
+```
+
+*gateway 실행*
+
+![](img/img_21.png)
+
+![](img/img_22.png)
+
+- api gateway-service의 **port 8000**으로 접속했는데 first-service와 second-service에 요청되는걸 확인할 수 있다.
