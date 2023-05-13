@@ -462,3 +462,147 @@ spring:
 ![](img/img_22.png)
 
 - api gateway-service의 **port 8000**으로 접속했는데 first-service와 second-service에 요청되는걸 확인할 수 있다.
+
+# Users Microservice - Security
+
+- **Spring Security**
+    - **Authentication + Authorization**
+
+*Spring Security 연동 과정*
+
+1. 애플리케이션에 `spring **security** jar`을 Dependency에 추가
+2. `**WebSecurityConfigurerAdapter**`를 상속받는 `Security **Configuration`** 클래스 생성
+3. `Security Configuration` 클래스에 `**@EnableWebSecurity**`추가
+4. **Authentication → `configure(AuthenticationManagerBuilder auth)`** 메서드를 재정의
+5. Password encode를 위한 `**BCryptPasswordEncoder**` 빈 정의
+6. **Authorization → `configure(HttpSecurity http)`** 메서드를 재정의
+
+***Dependency 추가***
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+***WebSecurity class***
+
+```java
+package com.example.userservice.security;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+
+@Configuration
+@EnableWebSecurity
+public class WebSecurity extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable();
+        http.authorizeRequests().antMatchers("/users/**").permitAll();
+
+				http.headers().frameOptions().disable();
+    }
+}
+```
+
+- `http.csrf().disable();`
+    - CSRF란 Cross site Request forgery로 **사이트 간 요청 위조**라는 의미로 웹 어플리케이션의 취약점 중 하나로, 이용자가 의도하지 않은 요청을 통한 공격을 의미한다. 즉 **CSRF 공격이란, 인터넷 사용자(희생자)가 자신의 의지와는 무관하게 공격자가 의도한 행위(등록, 수정, 삭제 등)를 특정 웹사이트에 요청하도록 만드는 공격**이다.
+    - 스프링에서는 기본적으로 csrf의 공격에 대해 보안을 하는데 해당 기능을 왜 disable 하는 것일까
+      이유는 Rest API를 이용한 서버라면, session 기반 인증과는 다르게 stateless하기 때문에 서버에 인증정보를 보관하지 않는다. Reqt API에서 client는 권한이 필요한 요청을 하기 위해서는 요청에 필요한 인증 정보를(Oauth2, jwt토큰 등)을 포함시켜야 한다. 따라서 서버에 인증정보를 저장하지 않기 때문에 굳이 불필요한 csrf 코드들을 작성할 필요가 없다.
+- `http.authorizeRequests().antMatchers("/users/**").permitAll();`
+    - {domain}/users/** 로 요청들은 인증 작업없이 허용하겠다는 의미를 가진다.
+    - ex1) http://localhost:8081/users
+    - ex2) http://localhost:8081/users/1
+
+> 참고: `Spring Security` library를 추가하게 되면 서버를 실행시
+`Using generated security password: {특정 암호키}`
+이런식의 로그가 찍히게 된다.
+현재로서 사용할 일은 없지만 나중에 프로젝트에서 특별하게 인증작업을 암호와 아이디를 사용하지 않을때 해당 인증키를 사용하여 인증을 할 수 있다.
+>
+
+*http.headers().frameOptions().disable();*
+
+http://localhost:{port}/h2-console 해당 url로 요청시
+
+![](img/img_23.png)
+
+이렇게 h2 콘솔 창이 표시되고 **Connect**버튼을 클릭시
+
+![](img/img_24.png)
+
+이렇게 프레임별로 나눠지고 깨진 화면이 표시된다.
+
+원인은 h2-console의 html에 프레임별로 데이터가 나누어져 있어서 그렇다. 그래서 `http.headers().frameOptions().disable();`을 해주면 h2 콘솔창이 잘 표시된다.
+
+![](img/img_25.png)
+
+***BCryptPasswordEncoder***
+
+**Bean 등록**
+
+*UserServiceApplication.java*
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class UserServiceApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+이런식으로 `UserServiceApplication.java`에 빈을 등록해야 서버가 실행될 때 딱 한 번만 객체를 생성해서 Bean으로 관리할 수 있다.
+
+*UserServiceImpl.java*
+
+```java
+package com.example.userservice.service;
+
+import com.example.userservice.dto.UserDto;
+import com.example.userservice.jpa.UserEntity;
+import com.example.userservice.jpa.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.modelmapper.convention.MatchingStrategies;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class UserServiceImpl implements UserService {
+    private final UserRepository userRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+
+    @Override
+    public UserDto createUser(UserDto userDto) {
+        userDto.setUserId(UUID.randomUUID().toString());
+
+        ModelMapper mapper = new ModelMapper();
+        mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT);
+        userDto.setEncryptPwd(passwordEncoder.encode(userDto.getPwd()));
+        UserEntity userEntity = mapper.map(userDto, UserEntity.class);
+
+        userRepository.save(userEntity);
+
+        UserDto returnUserDto = mapper.map(userEntity, UserDto.class);
+
+        return returnUserDto;
+    }
+}
+```
+
+`userDto.setEncryptPwd(passwordEncoder.encode(userDto.getPwd()));` 이렇게 `BCryptPasswordEncode`를 사용해서 password를 encode할 수 있다.
